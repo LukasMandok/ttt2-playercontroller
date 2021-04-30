@@ -20,27 +20,14 @@ function PlayerController:__init(tbl)
     self:StartControl(tbl)
 end
 
-
-
--- PlayerController = PlayerController or {
---     c_ply = nil,
---     t_ply = nil,
-
---     camera = nil,
-
---     back_pressed = false,
---     e_pressed = false,
--- }
-
 local TryT = LANG.TryTranslation
 local ParT = LANG.GetParamTranslation
 
-
-
 local ply_meta = FindMetaTable("Player")
+local ent_meta = FindMetaTable("Entity")
 
-ply_meta.OldSteamID64 = ply_meta.OldSteamID64 or ply_meta.SteamID64
-ply_meta.OldGetForward = ply_meta.OldGetForward or ply_meta.GetForward
+ply_meta.OldSteamID64  = ply_meta.OldSteamID64  or ply_meta.SteamID64
+ent_meta.OldGetForward = ent_meta.OldGetForward or ent_meta.GetForward
 
 WSWITCH.OldConfirmSelection = WSWITCH.OldConfirmSelection or WSWITCH.ConfirmSelection
 
@@ -64,13 +51,13 @@ function PlayerController:__overrideFunctions( flag )
             end
         end
 
-        -- WSITCH 
+        -- -- WSITCH 
         WSWITCH.ConfirmSelection = function() end
 
-        -- SteamID for Bots
+        -- -- SteamID for Bots
         if t_ply:IsBot() then
-            print("overriding SteamID64 for:", t_ply:Nick())
-            print("\nOld SteamID64:", t_ply:SteamID64())
+            --print("overriding SteamID64 for:", t_ply:Nick())
+            --print("\nOld SteamID64:", t_ply:SteamID64())
 
             --player_manager.SetPlayerClass(t_ply, "t_ply")
             ply_meta.SteamID64 = function(slf)
@@ -86,44 +73,42 @@ function PlayerController:__overrideFunctions( flag )
             end
             --print("PlayerClass:", player_manager.GetPlayerClass(t_ply))
             --PrintTable( baseclass.Get( "t_ply" ) )
-            print("New SteamID64:", t_ply:SteamID64())
+            --print("New SteamID64:", t_ply:SteamID64())
             --print("DisplayName:", t_ply.DisplayName)
         end
 
-        -- Forward function for clients
-        ply_meta.GetForward = function(slf)
+        -- -- Forward function for clients
+        ent_meta.GetForward = function(slf)
             if slf == t_ply then
                 local angle = slf:EyeAngles()
                 angle[3] = 0
                 return angle:Forward()
             else
-                return slf:GetForward()
+                return slf:OldGetForward()
             end
         end
 
     -- reset back to previous
     else
-        -- reset LocalPlayer function
-        if LocalPlayer != OldLocalPlayer then
-            LocalPlayer = OldLocalPlayer
+        --LocalPlayer = OldLocalPlayer
+        LocalPlayer = OldLocalPlayer
+
+        -- reset WSWITCH
+        WSWITCH.ConfirmSelection = WSWITCH.OldConfirmSelection
+
+        -- -- -- reset SteamID64 functino for bots
+        if t_ply:IsBot() then
+            --player_manager.ClearPlayerClass(t_ply)
+            ply_meta.SteamID64 = ply_meta.OldSteamID64
+            -- = function(self)
+            --     return nil
+            -- end
         end
 
-        -- -- reset WSWITCH
-        -- WSWITCH.ConfirmSelection = WSWITCH.OldConfirmSelection
-
-        -- -- reset SteamID64 functino for bots
-        -- if t_ply:IsBot() then
-        --     --player_manager.ClearPlayerClass(t_ply)
-        --     ply_meta.SteamID64 = ply_meta.OldSteamID64
-        --     -- = function(self)
-        --     --     return nil
-        --     -- end
-        -- end
-
-        -- -- reset GetForward function
-        -- if ply_meta.GetForward != ply_meta.OldGetForward then
-        --     ply_meta.GetForward = ply_meta.OldGetForward
-        -- end
+        -- -- reset GetForward function 
+        --if ent_meta.GetForward != ent_meta.OldGetForward then
+        ent_meta.GetForward = ent_meta.OldGetForward
+        --end
     end
 end
 
@@ -572,18 +557,22 @@ function PlayerController.buttonControls(ply, mv)
                     elseif p == controller.c_ply then c_i = #alive_players - 1 end
                 end
             end
+            
+            if t_i and c_i then
+                local n = #alive_players
+                local next = (c_i ~= (t_i + 1) % n and (t_i + 1) % n or (t_i + 2) % n ) + 1
 
-            local n = #alive_players
-            local next = (c_i ~= (t_i + 1) % n and (t_i + 1) % n or (t_i + 2) % n ) + 1
+                print("n", n, "t:", t_i, "c", c_i, "next:", next)
 
-            print("n", n, "t:", t_i, "c", c_i, "next:", next)
+                print("Switch through players.")
 
-            print("Switch through players.")
-
-            net.Start("PlayerController:NetControl")
-                net.WriteInt(PC_CL_SWITCH , 6)
-                net.WriteEntity(alive_players[next])
-            net.SendToServer()
+                net.Start("PlayerController:NetControl")
+                    net.WriteInt(PC_CL_SWITCH , 6)
+                    net.WriteEntity(alive_players[next])
+                net.SendToServer()
+            else 
+                print("target player: t_i =", t_i, "or controlling player: c_i =", c_i, "is not valid.")
+            end
         end
 
         return
@@ -592,7 +581,7 @@ function PlayerController.buttonControls(ply, mv)
     elseif input.IsKeyDown(KEY_LSHIFT) and input.WasKeyPressed(KEY_E) then
         if controller.e_pressed == false then
             controller.e_pressed = true
-            local ent = controller.camera.GetViewTargetEntity()
+            local ent = controller.camera:GetViewTargetEntity()
 
             if IsValid(ent) and ent:IsPlayer() and ent:Alive() then
                 if ent == controller.c_ply then
