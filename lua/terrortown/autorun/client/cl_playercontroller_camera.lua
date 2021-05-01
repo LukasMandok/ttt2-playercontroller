@@ -99,7 +99,7 @@ function PlayerCamera:CalcView(view, ply, on )
     --local view = c_view
 
     -- if Third Person
-    if view_flag == PC_CAM_THIRDPERSON then
+    if self.view_flag == PC_CAM_THIRDPERSON then
 
         view.origin = self.t_ply:GetShootPos() -- getThirdPersonPos(t_ply)
         view.angles = self.t_ply:EyeAngles()
