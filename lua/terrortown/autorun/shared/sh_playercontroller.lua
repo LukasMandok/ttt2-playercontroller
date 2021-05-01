@@ -157,10 +157,11 @@ local function UpdateSprintOverride()
 		if not ply:OnGround() then continue end
 
 		local wantsToMove
-		if ply:IsControlled() and IsValid(ply.controller["c_ply"]) then
-			local c_ply = ply.controller["c_ply"]
-			wantsToMove = c_ply:KeyDown(IN_FORWARD)   or c_ply:KeyDown(IN_BACK) or
-						  c_ply:KeyDown(IN_MOVERIGHT) or c_ply:KeyDown(IN_MOVELEFT)
+		if CLIENT and ply:IsControlled() and IsValid(ply.controller["c_ply"]) then
+			wantsToMove = ply.controller["ForwardMove"] != 0 or ply.controller["SideMove"] != 0
+			--local c_ply = ply.controller["c_ply"]
+			-- wantsToMove = c_ply:KeyDown(IN_FORWARD)   or c_ply:KeyDown(IN_BACK) or
+			-- 			  c_ply:KeyDown(IN_MOVERIGHT) or c_ply:KeyDown(IN_MOVELEFT)
 		else
 			wantsToMove = ply:KeyDown(IN_FORWARD) or ply:KeyDown(IN_BACK) or ply:KeyDown(IN_MOVERIGHT) or ply:KeyDown(IN_MOVELEFT)
 		end
@@ -168,10 +169,8 @@ local function UpdateSprintOverride()
 		if ply.sprintProgress == 1 and (not ply.isSprinting or not wantsToMove) then continue end
 		if ply.sprintProgress == 0 and ply.isSprinting and wantsToMove then
 			ply.sprintResetDelayCounter = ply.sprintResetDelayCounter + FrameTime()
-
 			-- If the player keeps sprinting even though they have no stamina, start refreshing stamina after 1.5 seconds automatically
 			if CLIENT and ply.sprintResetDelayCounter > 1.5 then
-				print("setting sprint to false")
 				PlayerSprint(false, ply.moveKey)
 			end
 
