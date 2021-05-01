@@ -255,10 +255,12 @@ end)
 function PlayerController.NetSendCommands(ply, cmd)
     --if not ply:IsController() then return end
 
-    local angles = cmd:GetViewAngles()
-    if ply:IsController() then
+    local angles 
+    if ply:IsController() and not ply.controller.look_around then
         local camera = ply.controller.camera
         angles = camera:GetCorrectedAngles()
+    elseif ply:IsController() and ply.controller.look_around then
+         angles = ply.controller.t_ply:EyeAngles()
     elseif ply:IsControlled() then
         angles = cmd:GetViewAngles()
     end
@@ -694,6 +696,17 @@ function PlayerController.buttonControls(ply, mv)
         end
 
         return
+
+    -- look around without changing the eyeangle of t_ply
+    elseif input.IsKeyDown(KEY_LSHIFT) and input.IsKeyDown(KEY_R) then
+        controller.look_around = true
+        return
+    end
+    
+    -- reset c_ply view
+    if controller.look_around == true then
+        controller.look_around = false
+        controller.camera:ResetView()
     end
 
     controller.back_pressed = false
@@ -746,6 +759,7 @@ function PlayerController:addHUDHelp()
     self:addHUDHelpLine(TryT("help_hud_end_PC"), "BACK") -- Key("+reload", "R")
     self:addHUDHelpLine(TryT("help_hud_switch_PC"), "SHIFT", "E" ) -- Key("+reload", "R")
     self:addHUDHelpLine(TryT("help_hud_next_PC"), "SHIFT", "BACK" ) -- Key("+reload", "R")
+    self:addHUDHelpLine(TryT("help_hud_look_around_PC"), "SHIFT", "R") --
 end
 
 function PlayerController:addHUDHelpLine(text, key1, key2)

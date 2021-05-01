@@ -67,6 +67,10 @@ function GetRealEyeTrace(pos, ang, filter, offset)
     return util.TraceLine(trace)
 end
 
+function PlayerCamera:ResetView()
+    self.view_angles = self.t_ply:EyeAngles()
+    self:CorrectShotAngle()
+end
 
 function PlayerCamera:ShouldDrawLocalPlayer( ply, on )
     return on or self.outLerp < 1
