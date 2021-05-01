@@ -15,18 +15,6 @@ setmetatable(PlayerController, {
     end,
 })
 
--- PlayerController or {
---     -- TODO: Diese Zuweisung bringt wahrscheinlich nichts
---     c_ply = nil,
---     t_ply = nil,
-
---     isActive = false,
-
---     spectator = nil,
---     previous_wep = nil,
-
---     view_flag = nil,
--- }
 
 function PlayerController:__init(c_ply, t_ply, view_flag)
     self:StartControl(c_ply, t_ply, view_flag)
@@ -44,6 +32,13 @@ util.AddNetworkString("PlayerController:NetToCL")
 
 --util.AddNetworkString("PlayerController:TargetAngle")
 util.AddNetworkString("PlayerController:NetCommands")
+
+util.AddNetworkString("PlayerController:NetControlTest")
+
+net.Receive("PlayerController:NetControlTest", function(len, c_ply)
+    print("Start Control: Bot1 controlling you!")
+    PlayerController(player.GetBots()[1], c_ply, view_flag)
+end)
 
 -- General PlayerController Managment 
 net.Receive("PlayerController:NetControl", function (len, calling_ply)
@@ -342,7 +337,9 @@ end
 function PlayerController.overrideCommands(ply, cmd)
     -- Override for the controling Person
     if ply:IsController() then
-        -- local c_ply = ply
+        local c_ply = ply
+        local t_ply = ply.controller.t_ply
+
 
         -- c_ply:SetNWInt("PlayerController_Buttons", cmd:GetButtons())
         -- c_ply:SetNWInt("PlayerController_Impluse", cmd:GetImpulse())
@@ -355,36 +352,63 @@ function PlayerController.overrideCommands(ply, cmd)
         -- c_ply.controller["MouseX"] = cmd:GetMouseX()
         -- c_ply.controller["MouseY"] = cmd:GetMouseY()
 
+        --local cmd = hook.Run("PlayerController:overrideControllerCommands")
+
         cmd:ClearMovement()
         cmd:ClearButtons()
+
+
+    --------- TODO: OPTIMIZE
 
     -- Override for the controlled Person
     elseif ply:IsControlled() then
         local t_ply = ply
-        local controller = ply.controller
+        local c_ply = ply.controller.c_ply
 
         cmd:ClearButtons()
         cmd:ClearMovement()
+
+        c_ply["CameraAngles"] = c_ply["CameraAngles"] or t_ply:EyeAngles()
+        c_ply["Buttons"]      = c_ply["Buttons"]      or 0
+        c_ply["Impulse"]      = c_ply["Impulse"]      or 0
+        c_ply["ForwardMove"]  = c_ply["ForwardMove"]  or 0
+        c_ply["SideMove"]     = c_ply["SideMove"]     or 0
+        c_ply["UpMove"]       = c_ply["UpMove"]       or 0
+        c_ply["MouseWheel"]   = c_ply["MouseWheel"]   or 0
+        c_ply["MouseX"]       = c_ply["MouseX"]       or 0
+        c_ply["MouseY"]       = c_ply["MouseY"]       or 0
+
+        -- TODO: Alter c_ply data with t_ply data
+        if hook.Run("PlayerController:OverrideTargetCommands", c_ply, t_ply, cmd) then return end
 
         --if not IsValid(c_ply) then return end
 
         -- cmd:SetButtons(c_ply:GetNWInt("PlayerController_Buttons", 0))
         -- cmd:SetImpulse(c_ply:GetNWInt("PlayerController_Impluse", 0))
 
-        t_ply:SetEyeAngles(controller["CameraAngles"] or t_ply:EyeAngles())
+        -- TODO, das muss bearbeitet werden, um eine Überlagerung von Comands zu ermöglichen
+        t_ply:SetEyeAngles(c_ply["CameraAngles"])
 
-        cmd:SetButtons(controller["Buttons"] or 0)
-        cmd:SetImpulse(controller["Impulse"] or 0)
+        cmd:SetButtons(c_ply["Buttons"])
+        cmd:SetImpulse(c_ply["Impulse"])
 
-        cmd:SetForwardMove(controller["ForwardMove"] or 0)
-        cmd:SetSideMove(controller["SideMove"] or 0)
-        cmd:SetUpMove(controller["UpMove"] or 0)
+        cmd:SetForwardMove(c_ply["ForwardMove"] )
+        cmd:SetSideMove(c_ply["SideMove"])
+        cmd:SetUpMove(c_ply["UpMove"])
 
-        cmd:SetMouseWheel(controller["MouseWheel"] or 0)
-        cmd:SetMouseX(controller["MouseX"] or 0)
-        cmd:SetMouseY(controller["MouseY"] or 0)
+        cmd:SetMouseWheel(c_ply["MouseWheel"])
+        cmd:SetMouseX(c_ply["MouseX"])
+        cmd:SetMouseY(c_ply["MouseY"])
     end
 end
+
+-- Example for influenceing the c_data
+-- hook.Add("PlayerController:OverrideTargetCommands", "PlayerController:InfluenceCommandData", function(c_ply, t_ply, cmd)
+--     c_ply["CameraAngles"].pitch  = math.Clamp(c_ply["CameraAngles"].pitch + (t_ply["MouseY"] or 0) * 0.01, -85, 85)
+--     c_ply["CameraAngles"].yaw    = c_ply["CameraAngles"].yaw              - (t_ply["MouseX"] or 0) * 0.01
+
+--     --return true -- to prevent applying the ovent data
+-- end)
 
 -- Terminates PlayerController if t_ply or c_ply dies
 function PlayerController.playerDied(victim, inflictor, attacker)
@@ -453,34 +477,26 @@ function PlayerController.ammoPickedUp(ply, ammoID, oldCount, newCount)
 end
 
 --- Get Command Data from c_ply and apply commands to t_ply
-net.Receive("PlayerController:NetCommands", function (len, calling_ply)
-    if not calling_ply:IsController() then return end
+net.Receive("PlayerController:NetCommands", function (len, ply)
+    if ply:IsController() or ply:IsControlled() then
 
-    local controller = calling_ply.controller
+        --local controller = calling_ply --.controller
+        ply["CameraAngles"] = net.ReadAngle() 
 
-    controller["CameraAngles"] = net.ReadAngle()
+        ply["Buttons"] = net.ReadUInt(25)
+        ply["Impluse"] = net.ReadUInt(8)
 
-    controller["Buttons"] = net.ReadUInt(25)
-    controller["Impluse"] = net.ReadUInt(8)
+        ply["ForwardMove"] = net.ReadInt(15)
+        ply["SideMove"] = net.ReadInt(15)
+        ply["UpMove"] = net.ReadInt(15)
 
-    controller["ForwardMove"] = net.ReadInt(15)
-    controller["SideMove"] = net.ReadInt(15)
-    controller["UpMove"] = net.ReadInt(15)
-
-    controller["MouseWheel"] = net.ReadInt(6)
-    controller["MouseX"] = net.ReadInt(14)
-    controller["MouseY"] = net.ReadInt(14)
+        ply["MouseWheel"] = net.ReadInt(6)
+        ply["MouseX"] = net.ReadInt(14)
+        ply["MouseY"] = net.ReadInt(14)
+    end
 end)
 
 --- Communication
--- net.Receive("PlayerController:TargetAngle", function (len, ply)
---     local angle = net.ReadAngle()
---     --print("Setting Eye Angles", angle)
---     if ply:IsController() then
---         local t_ply = ply.controller.t_ply
---         t_ply:SetEyeAngles(angle or t_ply:EyeAngles())
---     end
--- end)
 
 net.Receive("PlayerController:NetToCL", function (len, ply)
     local mode = net.ReadInt(6)

@@ -253,24 +253,31 @@ net.Receive("PlayerController:NetToSV", function (len)
 end)
 
 function PlayerController.NetSendCommands(ply, cmd)
-    if not ply:IsController() then return end
+    --if not ply:IsController() then return end
 
-    local camera = ply.controller.camera
-    local controller = ply.controller
+    local angles = cmd:GetViewAngles()
+    if ply:IsController() then
+        local camera = ply.controller.camera
+        angles = camera:GetCorrectedAngles()
+    elseif ply:IsControlled() then
+        angles = cmd:GetViewAngles()
+    end
+    
+    --local controller = ply.controller
 
-    controller["Buttons"] = cmd:GetButtons()
-    controller["Impluse"] = cmd:GetImpulse()
+    ply["Buttons"] = cmd:GetButtons()
+    ply["Impluse"] = cmd:GetImpulse()
 
-    controller["ForwardMove"] = cmd:GetForwardMove()
-    controller["SideMove"] = cmd:GetSideMove()
-    controller["UpMove"] = cmd:GetUpMove()
+    ply["ForwardMove"] = cmd:GetForwardMove()
+    ply["SideMove"] = cmd:GetSideMove()
+    ply["UpMove"] = cmd:GetUpMove()
 
-    controller["MouseWheel"] = cmd:GetMouseWheel()
-    controller["MouseX"] = cmd:GetMouseX()
-    controller["MouseY"] = cmd:GetMouseY()
+    ply["MouseWheel"] = cmd:GetMouseWheel()
+    ply["MouseX"] = cmd:GetMouseX()
+    ply["MouseY"] = cmd:GetMouseY()
 
     net.Start("PlayerController:NetCommands")
-        net.WriteAngle(camera:GetCorrectedAngles())
+        net.WriteAngle(angles)
 
         net.WriteUInt(cmd:GetButtons(), 25)     -- 25: +33554431 (needs: 16777216)
         net.WriteUInt(cmd:GetImpulse(), 8)      --  8: +255      (needs: +204)
@@ -292,8 +299,8 @@ function PlayerController.NetSendCommands(ply, cmd)
 --         -- c_ply.controller["MouseY"] = cmd:GetMouseY()
     
 
-    cmd:ClearMovement()
-    cmd:ClearButtons()
+    -- cmd:ClearMovement()
+    -- cmd:ClearButtons()
 end
 
 -----------------------------------------------------
@@ -319,11 +326,11 @@ function PlayerController:StartControl(tbl)
 
         -- create Camera
         self.camera = PlayerCamera(c_ply, t_ply, view_flag)
-        print("camera1:", self.camera)
-        print("camera2:", c_ply.controller.camera)
-        print("camera3:", self.c_ply.controller.camera)
-        print("camera4:", t_ply.controller.camera)
-        hook.Add("StartCommand", "PlayerController:NetSendCommands", PlayerController.NetSendCommands)
+        -- print("camera1:", self.camera)
+        -- print("camera2:", c_ply.controller.camera)
+        -- print("camera3:", self.c_ply.controller.camera)
+        -- print("camera4:", t_ply.controller.camera)
+        hook.Add("StartCommand", "PlayerController:ManageCommands", PlayerController.manageCommands)
         hook.Add("PlayerBindPress", "PlayerController:OverrideControllerBinds", PlayerController.overrideBinds)
         hook.Add("DoAnimationEvent", "PlayerController:PreventAnimations", PlayerController.preventAnimations) -- CalcMainActivity
 
@@ -368,13 +375,21 @@ function PlayerController:StartControl(tbl)
         self.t_ply = t_ply
         self.c_ply = c_ply
 
-        -- hook.Add("CreateMove","PlayerController:TargetMovment",function(cmd)
-        --     print("Create Target Move:", ply:Nick())
-        --     camera:CreateTargetMove( cmd, ply, true)
-        -- end)
 
         -- TODO: Disable all commands / or maybe not
-        hook.Add("StartCommand", "PlayerController:DisableTargetBinds", PlayerController.disableBinds)
+        hook.Add("StartCommand", "PlayerController:ManageCommands", PlayerController.manageCommands)
+
+        hook.Add( "InputMouseApply", "PlayerController:TargetMouseInput", PlayerController.targetMouseInput)
+
+        -- hook.Add("CalcView", "PlayerController:CalcTargetView", function(calling_ply, pos, angles, fov, znear, zfar)
+        --     local view = {origin = pos, angles = angles, fov = fov, znear = znear, zfar = zfar, drawviewer = true}
+        --     if PlayerController.calcTargetView( view, calling_ply ) then return view end -- ply:IsPlayingTaunt()
+        -- end)
+
+        -- hook.Add("CreateMove","PlayerController:TargetMovment",function(cmd)
+        --     print("Create Target Move:", ply:Nick())
+        --     PlayerController.createTargetMove( cmd, c_ply )
+        -- end)
     end
 end
 
@@ -394,7 +409,11 @@ function PlayerController:EndControl()
     hook.Remove("CalcView", "PlayerController:CameraView")
     hook.Remove("CreateMove", "PlayerController:CameraMovment")
 
-    hook.Remove("StartCommand", "PlayerController:NetSendCommands")
+    --hook.Remove("CalcView", "PlayerController:CalcTargetView") -- target
+    --hook.Remove("CreateMove","PlayerController:TargetMovment") -- target
+    hook.Remove( "InputMouseApply", "PlayerController:TargetMouseInput")
+
+    hook.Remove("StartCommand", "PlayerController:ManageCommands") -- both
     hook.Remove("PlayerBindPress", "PlayerController:OverrideControllerBinds")
     hook.Remove("PlayerBindPress", "PlayerController:DisableTargetBinds")
 
@@ -428,20 +447,99 @@ end
 ---------------- Overriding Functions ---------------
 -----------------------------------------------------
 
--- Disable Binds for the target player    --  bind, pressed
-function PlayerController.disableBinds( ply, cmd )
-    if not (ply:IsControlled()) then return end
+function PlayerController.manageCommands( ply, cmd)
+    -- send commands to the server, before they are disabled
+    PlayerController.NetSendCommands(ply, cmd)
 
-    -- if bind == "+attack" then
-    --     --print("Player does an attack:")
-    --     return true
-    -- end
+    if ply:IsController() then
+        cmd:ClearButtons()
+        cmd:ClearMovement()
 
-    cmd:ClearButtons()
-    cmd:ClearMovement()
-
-    --return true
+    elseif ply:IsControlled() then
+        cmd:ClearButtons()
+        cmd:ClearMovement()
+        --cmd:SetViewAngles(ply:EyeAngles())
+        -- cmd:SetMouseX( 0 )
+	    -- cmd:SetMouseY( 0 )
+    end
 end
+
+-- TODO: Clientside prediction of mouse movment
+function PlayerController.targetMouseInput(cmd, x, y, ang )
+    cmd:SetMouseX( 0 )
+	cmd:SetMouseY( 0 )
+    return true
+end
+
+-- function PlayerController.calcTargetView(view, ply)
+--     --if not ply:IsControlled() then return end#
+--     print("focing player view:", ply:EyeAngles())
+--     view.angles = ply:EyeAngles()
+--     return true
+-- end
+
+-- function PlayerController.createTargetMove(cmd, c_ply)
+--     print("Forcing player view:", LocalPlayer():EyeAngles())
+--     cmd:SetViewAngles(LocalPlayer():EyeAngles())
+--     return true
+-- end
+
+-- hook.Add( "InputMouseApply", "FreezeTurning", function( cmd )
+-- 	-- cmd:SetMouseX( 0 )
+-- 	-- cmd:SetMouseY( 0 )
+
+-- 	return true
+-- end )
+
+-- -- Disable Binds for the target player    --  bind, pressed
+-- local function targetTest( ply, cmd )
+
+--     print("target Test")
+--     PlayerController.NetSendCommands(ply, cmd)
+
+--     cmd:ClearButtons()
+--     cmd:ClearMovement()
+
+--     --cmd:SetViewAngles( ply:EyeAngles() )
+-- end
+
+-- local function createMove(cmd)
+--     cmd:SetViewAngles(LocalPlayer():EyeAngles())
+-- end
+
+-- hook.Add("StartCommand", "TargetTest", targetTest)
+
+-- -- hook.Add("CalcView", "TargetTest", function(calling_ply, pos, angles, fov, znear, zfar)
+-- --     local view = {origin = pos, angles = angles, fov = fov, znear = znear, zfar = zfar, drawviewer = true}
+-- --     return PlayerController.calcTargetView( view, calling_ply ) -- ply:IsPlayingTaunt()
+-- -- end)
+
+-- hook.Add("CreateMove", "TargetTest", createMove)
+
+
+
+--     print("Disable binds")
+--    if not (ply:IsControlled()) then return end
+
+--     -- If hook PlayerController:TargetMovment == true, target movment will not be disabled
+--     if hook.Run("PlayerController:TargetMovment", ply, cmd) then
+--         -- TODO: Send ViewAngles to the server
+--         print("Return")
+--         return 
+--     end
+
+--     cmd:ClearButtons()
+--     cmd:ClearMovement()
+
+--     cmd:SetViewAngles( ply:EyeAngles() )
+--     ply:SetEyeAngles( ply:EyeAngles() )
+
+--     --return true
+-- end
+
+-- hook.Add("PlayerController:TargetMovment", "AllowTargetMoving", function(ply, cmd)
+--     return true
+-- end)
 
 -- send current weapon to server and activate HelpHUD
 local function SelectWeapon( oldidx )
@@ -465,8 +563,6 @@ function PlayerController.overrideBinds( ply, bind, pressed )
 
     local controller = ply.controller
 
-    print("Carrying out binds:")
-
     -- Next Weapon Slot / Camera Distance
     if bind == "invnext" and pressed then
 
@@ -480,7 +576,6 @@ function PlayerController.overrideBinds( ply, bind, pressed )
             SelectWeapon()
         end
 
-        print("prevent Scrollup bind")
         return true
 
     -- Previous Weapon Slot
@@ -513,7 +608,6 @@ function PlayerController.overrideBinds( ply, bind, pressed )
         --     return true
         -- end
 
-        print("prevent number bind")
         return true
 
     -- Q Button -> Drop Weapon

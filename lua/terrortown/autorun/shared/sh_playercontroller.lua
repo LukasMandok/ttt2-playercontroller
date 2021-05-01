@@ -158,7 +158,7 @@ local function UpdateSprintOverride()
 
 		local wantsToMove
 		if CLIENT and ply:IsControlled() and IsValid(ply.controller["c_ply"]) then
-			wantsToMove = ply.controller["ForwardMove"] != 0 or ply.controller["SideMove"] != 0
+			wantsToMove = ply.controller.c_ply["ForwardMove"] != 0 or ply.controller.c_ply["SideMove"] != 0
 			--local c_ply = ply.controller["c_ply"]
 			-- wantsToMove = c_ply:KeyDown(IN_FORWARD)   or c_ply:KeyDown(IN_BACK) or
 			-- 			  c_ply:KeyDown(IN_MOVERIGHT) or c_ply:KeyDown(IN_MOVELEFT)
