@@ -26,6 +26,7 @@ local ParT = LANG.GetParamTranslation
 local ply_meta = FindMetaTable("Player")
 local ent_meta = FindMetaTable("Entity")
 
+ply_meta.OldIsSpec      = ply_meta.OldIsSpec or ply_meta.IsSpec
 ply_meta.OldSteamID64  = ply_meta.OldSteamID64  or ply_meta.SteamID64
 ent_meta.OldGetForward = ent_meta.OldGetForward or ent_meta.GetForward
 
@@ -77,6 +78,15 @@ function PlayerController:__overrideFunctions( flag )
             --print("DisplayName:", t_ply.DisplayName)
         end
 
+        --override spectator function:
+        ply_meta.IsSpec = function(slf)
+            if t_ply == nil then
+                return slf:OlIsSpec()
+            else
+                return t_ply:OldIsSpec()
+            end
+        end
+
         -- -- Forward function for clients
         ent_meta.GetForward = function(slf)
             if slf == t_ply then
@@ -104,6 +114,9 @@ function PlayerController:__overrideFunctions( flag )
             --     return nil
             -- end
         end
+
+        -- reset ALive function
+        ply_meta.IsSpec = ply_meta.OldIsSpec
 
         -- -- reset GetForward function 
         --if ent_meta.GetForward != ent_meta.OldGetForward then
