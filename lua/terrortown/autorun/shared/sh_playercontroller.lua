@@ -11,6 +11,9 @@ PC_SV_MESSAGE = 2
 PC_SV_INVENTORY = 3
 PC_SV_PLAYER = 4
 
+PC_SERVERSIDE = 0
+PC_CLIENTSIDE = 1
+
 -- Pickups
 PC_PICKUP_WEAPON = 0
 PC_PICKUP_ITEM = 1
@@ -26,6 +29,7 @@ PC_CL_DROP_WEAPON = 1
 PC_CL_INVENTORY = 2
 PC_CL_MESSAGE = 3
 
+-- View_Flags
 PC_CAM_ROAMING = 0
 PC_CAM_THIRDPERSON = 1
 PC_CAM_FIRSTPERSON = 2
@@ -118,6 +122,96 @@ end
 -- end
 
 -- SHARED
+
+function PlayerController:targetMove(cmd)
+	local t_ply = self.t_ply
+	local c_ply = self.c_ply
+	local commands = {}
+	local flag = false
+
+	cmd:ClearButtons()
+	cmd:ClearMovement()
+
+	-- write commands you want to handle yourself
+	-- return true to skip standardhanling of remaining inputs
+	-- do:   commands = t_ply (to only take commands of target Player)
+	--       commands = c_ply (to only take comands of controlling Player)   
+	local commands, flag = hook.Run("PlayerController:OverrideTargetCommands", c_ply, t_ply, commands, self.net_flag)
+	
+	flag = flag or false 
+	commands = commands or {}
+
+	if flag == false then
+		-- do some standard input handling
+		--print("Do standrad input handling")
+		local angle = t_ply:EyeAngles()
+		--print("angle: ", c_ply["CameraAngles"], angle)
+
+		angle.pitch  = math.Clamp((c_ply["CameraAngles"] or angle).pitch + (t_ply["MouseY"] or 0) * 0.01, -85, 85) -- todo: es könnte sein, dass das nicht funktioniert
+		angle.yaw    = (c_ply["CameraAngles"] or angle).yaw              - (t_ply["MouseX"] or 0) * 0.01           --       da auf dem Client eine andere Richtung berechnet wird.
+
+		commands["CameraAngles"] = commands["CameraAngles"] or angle
+		commands["Buttons"]      = commands["Buttons"]      or ((t_ply["Buttons"] or 0)     + (c_ply["Buttons"] or 0))
+		commands["Impulse"]      = commands["Impulse"]      or ((t_ply["Impulse"] or 0)     + (c_ply["Impulse"] or 0))
+		commands["ForwardMove"]  = commands["ForwardMove"]  or ((t_ply["ForwardMove"] or 0) + (c_ply["ForwardMove"] or 0))
+		commands["SideMove"]     = commands["SideMove"]     or ((t_ply["SideMove"] or 0)    + (c_ply["SideMove"] or 0))
+		commands["UpMove"]       = commands["UpMove"]       or ((t_ply["UpMove"] or 0)      + (c_ply["UpMove"] or 0))
+		commands["MouseWheel"]   = commands["MouseWheel"]   or ((t_ply["MouseWheel"] or 0)  + (c_ply["MouseWheel"] or 0))
+		commands["MouseX"]       = commands["MouseX"]       or ((t_ply["MouseX"] or 0)      + (c_ply["MouseX"] or 0))
+		commands["MouseY"]       = commands["MouseY"]       or ((t_ply["MouseY"] or 0)      + (c_ply["MouseY"] or 0))
+	else
+		--print("Skip standard handling")
+	end
+
+
+	-- -- only take t_ply commands
+	-- if result != nil and result == false then
+	--     commands["CameraAngles"] = c_ply["CameraAngles"] or t_ply:EyeAngles()
+	--     commands["Buttons"]      = c_ply["Buttons"]      or 0
+	--     commands["Impulse"]      = c_ply["Impulse"]      or 0
+	--     commands["ForwardMove"]  = c_ply["ForwardMove"]  or 0
+	--     commands["SideMove"]     = c_ply["SideMove"]     or 0
+	--     commands["UpMove"]       = c_ply["UpMove"]       or 0
+	--     commands["MouseWheel"]   = c_ply["MouseWheel"]   or 0
+	--     commands["MouseX"]       = c_ply["MouseX"]       or 0
+	--     commands["MouseY"]       = c_ply["MouseY"]       or 0
+
+	-- -- only take c_ply commands
+	-- elseif result == true then
+	--     commands["CameraAngles"] = c_ply["CameraAngles"] or t_ply:EyeAngles()
+	--     commands["Buttons"]      = c_ply["Buttons"]      or 0
+	--     commands["Impulse"]      = c_ply["Impulse"]      or 0
+	--     commands["ForwardMove"]  = c_ply["ForwardMove"]  or 0
+	--     commands["SideMove"]     = c_ply["SideMove"]     or 0
+	--     commands["UpMove"]       = c_ply["UpMove"]       or 0
+	--     commands["MouseWheel"]   = c_ply["MouseWheel"]   or 0
+	--     commands["MouseX"]       = c_ply["MouseX"]       or 0
+	--     commands["MouseY"]       = c_ply["MouseY"]       or 0
+	-- end 
+
+	--if not IsValid(c_ply) then return end
+
+	-- cmd:SetButtons(c_ply:GetNWInt("PlayerController_Buttons", 0))
+	-- cmd:SetImpulse(c_ply:GetNWInt("PlayerController_Impluse", 0))
+
+	--print("commands:", commands["CameraAngles"], "c_ply", c_ply["CameraAngles"])
+
+	-- TODO, das muss bearbeitet werden, um eine Überlagerung von Comands zu ermöglichen
+	t_ply:SetEyeAngles(commands["CameraAngles"] or t_ply:EyeAngles())
+
+	cmd:SetButtons(commands["Buttons"] or 0)
+	cmd:SetImpulse(commands["Impulse"] or 0)
+
+	cmd:SetForwardMove(commands["ForwardMove"] or 0)
+	cmd:SetSideMove(commands["SideMove"] or 0)
+	cmd:SetUpMove(commands["UpMove"] or 0)
+
+	cmd:SetMouseWheel(commands["MouseWheel"] or 0)
+	cmd:SetMouseX(commands["MouseX"] or 0)
+	cmd:SetMouseY(commands["MouseY"] or 0)
+end
+
+
 
 -- Override Shared version of UpdateSprint 
 

@@ -15,13 +15,14 @@ setmetatable(PlayerController, {
 })
 
 function PlayerController:__init(tbl)
-    -------------- Overriding Network Communication --------------
-
     self:StartControl(tbl)
 end
 
 local TryT = LANG.TryTranslation
 local ParT = LANG.GetParamTranslation
+
+
+-------------- Overriding Network Communication --------------
 
 local ply_meta = FindMetaTable("Player")
 local ent_meta = FindMetaTable("Entity")
@@ -158,9 +159,9 @@ end
 ------------------- Communication -------------------
 -----------------------------------------------------
 
-function PlayerController.NetSendCl( mode, arg1, arg2 )
-    net.Start("PlayerController:NetToCL")
-        net.WriteInt(mode, 6)
+function PlayerController.SendControlToSV( mode, arg1, arg2 )
+    net.Start("PlayerController:ControlToSV")
+        net.WriteUInt(mode, 3)
 
         if mode == PC_CL_WEAPON then
             net.WriteString(arg1)
@@ -175,8 +176,8 @@ function PlayerController.NetSendCl( mode, arg1, arg2 )
     net.SendToServer()
 end
 
-
-net.Receive("PlayerController:NetToSV", function (len)
+-- Receive essage 
+net.Receive("PlayerController:ControlToCL", function (len)
     local ply = OldLocalPlayer()
     if not IsValid(ply) then return end
     local tbl = net.ReadTable()
@@ -265,21 +266,46 @@ net.Receive("PlayerController:NetToSV", function (len)
     end
 end)
 
+net.Receive("PlayerController:ControllerCommands", function (len)
+    print("Receive Controller Commands")
+    if not OldLocalPlayer():IsControlled() then return end
+    local c_ply = OldLocalPlayer().controller.c_ply 
+
+    c_ply["CameraAngles"] = net.ReadAngle() 
+
+    c_ply["Buttons"] = net.ReadUInt(25)
+    c_ply["Impluse"] = net.ReadUInt(8)
+
+    c_ply["ForwardMove"] = net.ReadInt(15)
+    c_ply["SideMove"] = net.ReadInt(15)
+    c_ply["UpMove"] = net.ReadInt(15)
+
+    c_ply["MouseWheel"] = net.ReadInt(6)
+    c_ply["MouseX"] = net.ReadInt(14)
+    c_ply["MouseY"] = net.ReadInt(14)
+end)
+
 function PlayerController.NetSendCommands(ply, cmd)
     --if not ply:IsController() then return end
 
+    
     local angles 
-    if ply:IsController() and not ply.controller.look_around then
+    -- controller + not lookaround -> camera angle
+    if ply:IsController() and not ply.controller.camera.look_around then
         local camera = ply.controller.camera
         angles = camera:GetCorrectedAngles()
-    elseif ply:IsController() and ply.controller.look_around then
+    
+    -- controler + lookaround -> t_ply Angle()
+    elseif ply:IsController() and ply.controller.camera.look_around then
          angles = ply.controller.t_ply:EyeAngles()
+    
+    -- target -> input Angle
     elseif ply:IsControlled() then
+        print("t_ply cmd:GetViewAngles")
         angles = cmd:GetViewAngles()
     end
     
-    --local controller = ply.controller
-
+    --get commands of the local player
     ply["Buttons"] = cmd:GetButtons()
     ply["Impluse"] = cmd:GetImpulse()
 
@@ -291,19 +317,20 @@ function PlayerController.NetSendCommands(ply, cmd)
     ply["MouseX"] = cmd:GetMouseX()
     ply["MouseY"] = cmd:GetMouseY()
 
+    -- send comands to the server
     net.Start("PlayerController:NetCommands")
         net.WriteAngle(angles)
 
-        net.WriteUInt(cmd:GetButtons(), 25)     -- 25: +33554431 (needs: 16777216)
-        net.WriteUInt(cmd:GetImpulse(), 8)      --  8: +255      (needs: +204)
+        net.WriteUInt(ply["Buttons"], 25)     -- 25: +33554431 (needs: 16777216)
+        net.WriteUInt(ply["Impluse"] , 8)      --  8: +255      (needs: +204)
 
-        net.WriteInt(cmd:GetForwardMove(), 15)  -- 15: +-16384   (needs: +-10000)
-        net.WriteInt(cmd:GetSideMove(), 15)     -- 15: +-16384   (needs: +-10000)
-        net.WriteInt(cmd:GetUpMove(), 15)       -- 15: +-16384   (needs: +-10000)
+        net.WriteInt(ply["ForwardMove"], 15)  -- 15: +-16384   (needs: +-10000)
+        net.WriteInt(ply["SideMove"], 15)     -- 15: +-16384   (needs: +-10000)
+        net.WriteInt(ply["UpMove"], 15)       -- 15: +-16384   (needs: +-10000)
 
-        net.WriteInt(cmd:GetMouseWheel(), 6)    --  6: +-31      (needs: +-25)
-        net.WriteInt(cmd:GetMouseX(), 14)       -- 14: +-8191    (needs: +-5000)
-        net.WriteInt(cmd:GetMouseY(), 14)       -- 14: +-8191    (needs: +-5000)
+        net.WriteInt(ply["MouseWheel"], 6)    --  6: +-31      (needs: +-25)
+        net.WriteInt(ply["MouseX"], 14)       -- 14: +-8191    (needs: +-5000)
+        net.WriteInt(ply["MouseY"], 14)       -- 14: +-8191    (needs: +-5000)
     net.SendToServer()
 --         -- c_ply.controller["ForwardMove"] = cmd:GetForwardMove()
 --         -- c_ply.controller["SideMove"] = cmd:GetSideMove()
@@ -313,9 +340,6 @@ function PlayerController.NetSendCommands(ply, cmd)
 --         -- c_ply.controller["MouseX"] = cmd:GetMouseX()
 --         -- c_ply.controller["MouseY"] = cmd:GetMouseY()
     
-
-    -- cmd:ClearMovement()
-    -- cmd:ClearButtons()
 end
 
 -----------------------------------------------------
@@ -336,11 +360,12 @@ function PlayerController:StartControl(tbl)
         self.t_ply = t_ply
         self.c_ply = c_ply
 
-        local view_flag = tbl.view_flag or PC_CAM_FIRSTPERSON
+        self.view_flag = tbl.view_flag or PC_CAM_FIRSTPERSON
+        self.net_flag  = tbl.net_flag  or PC_SERVERSIDE 
 
 
         -- create Camera
-        self.camera = PlayerCamera(c_ply, t_ply, view_flag)
+        self.camera = PlayerCamera(self.c_ply, self.t_ply, self.view_flag, self.net_flag)
         -- print("camera1:", self.camera)
         -- print("camera2:", c_ply.controller.camera)
         -- print("camera3:", self.c_ply.controller.camera)
@@ -401,10 +426,7 @@ function PlayerController:StartControl(tbl)
         --     if PlayerController.calcTargetView( view, calling_ply ) then return view end -- ply:IsPlayingTaunt()
         -- end)
 
-        -- hook.Add("CreateMove","PlayerController:TargetMovment",function(cmd)
-        --     print("Create Target Move:", ply:Nick())
-        --     PlayerController.createTargetMove( cmd, c_ply )
-        -- end)
+        hook.Add("CreateMove", "PlayerController:TargetMovment", PlayerController.createTargetMove)
     end
 end
 
@@ -425,7 +447,7 @@ function PlayerController:EndControl()
     hook.Remove("CreateMove", "PlayerController:CameraMovment")
 
     --hook.Remove("CalcView", "PlayerController:CalcTargetView") -- target
-    --hook.Remove("CreateMove","PlayerController:TargetMovment") -- target
+    hook.Remove("CreateMove","PlayerController:TargetMovment") -- target
     hook.Remove( "InputMouseApply", "PlayerController:TargetMouseInput")
 
     hook.Remove("StartCommand", "PlayerController:ManageCommands") -- both
@@ -462,15 +484,17 @@ end
 ---------------- Overriding Functions ---------------
 -----------------------------------------------------
 
-function PlayerController.manageCommands( ply, cmd)
+function PlayerController.manageCommands( ply, cmd )
     -- send commands to the server, before they are disabled
     PlayerController.NetSendCommands(ply, cmd)
 
+    -- clear comands for the controller
     if ply:IsController() then
         cmd:ClearButtons()
         cmd:ClearMovement()
 
-    elseif ply:IsControlled() then
+    -- clear comands for the target, if operated serverside
+    elseif ply:IsControlled() and ply.controller.net_flag == PC_SERVERSIDE then
         cmd:ClearButtons()
         cmd:ClearMovement()
         --cmd:SetViewAngles(ply:EyeAngles())
@@ -493,11 +517,57 @@ end
 --     return true
 -- end
 
--- function PlayerController.createTargetMove(cmd, c_ply)
---     print("Forcing player view:", LocalPlayer():EyeAngles())
---     cmd:SetViewAngles(LocalPlayer():EyeAngles())
---     return true
--- end
+function PlayerController.createTargetMove(cmd)
+    local t_ply = OldLocalPlayer()
+    if not t_ply:IsControlled() or t_ply.controller.net_flag == PC_SERVERSIDE then return end
+
+    t_ply.controller:targetMove(cmd)
+
+    -- local c_ply = t_ply.controller.c_ply
+
+    -- print("Forcing player view:", LocalPlayer():EyeAngles())
+    -- print("target Player, ForwardMove:", t_ply["ForwardMove"])
+    -- print("controlling Player, Forward Move:", c_ply["ForwardMove"])
+
+    -- local commands = {}
+
+    -- cmd:ClearButtons()
+    -- cmd:ClearMovement()
+
+    -- commands["CameraAngles"] = c_ply["CameraAngles"] or t_ply:EyeAngles()
+    -- commands["Buttons"]      = c_ply["Buttons"]      or 0
+    -- commands["Impulse"]      = c_ply["Impulse"]      or 0
+    -- commands["ForwardMove"]  = c_ply["ForwardMove"]  or 0
+    -- commands["SideMove"]     = c_ply["SideMove"]     or 0
+    -- commands["UpMove"]       = c_ply["UpMove"]       or 0
+    -- commands["MouseWheel"]   = c_ply["MouseWheel"]   or 0
+    -- commands["MouseX"]       = c_ply["MouseX"]       or 0
+    -- commands["MouseY"]       = c_ply["MouseY"]       or 0
+
+    -- -- TODO: Alter c_ply data with t_ply data
+    -- if hook.Run("PlayerController:OverrideTargetCommands", c_ply, t_ply, cmd, commands) then return end
+
+    -- --if not IsValid(c_ply) then return end
+
+    -- -- cmd:SetButtons(c_ply:GetNWInt("PlayerController_Buttons", 0))
+    -- -- cmd:SetImpulse(c_ply:GetNWInt("PlayerController_Impluse", 0))
+
+    -- -- TODO, das muss bearbeitet werden, um eine Überlagerung von Comands zu ermöglichen
+    -- t_ply:SetEyeAngles(commands["CameraAngles"])
+
+    -- cmd:SetButtons(commands["Buttons"])
+    -- cmd:SetImpulse(commands["Impulse"])
+
+    -- cmd:SetForwardMove(commands["ForwardMove"] )
+    -- cmd:SetSideMove(commands["SideMove"])
+    -- cmd:SetUpMove(commands["UpMove"])
+
+    -- cmd:SetMouseWheel(commands["MouseWheel"])
+    -- cmd:SetMouseX(commands["MouseX"])
+    -- cmd:SetMouseY(commands["MouseY"])
+
+     return true
+end
 
 -- hook.Add( "InputMouseApply", "FreezeTurning", function( cmd )
 -- 	-- cmd:SetMouseX( 0 )
@@ -569,17 +639,18 @@ local function SelectWeapon( oldidx )
     --     wep:Initialize()
     -- end
 
-    PlayerController.NetSendCl(PC_CL_WEAPON, wep:GetClass())
+    PlayerController.SendControlToSV(PC_CL_WEAPON, wep:GetClass())
 end
 
 -- Override Binds
 function PlayerController.overrideBinds( ply, bind, pressed )
-    if not (ply:IsController()) then return end
+    if not ply:IsController() then return end
 
     local controller = ply.controller
 
     -- Next Weapon Slot / Camera Distance
     if bind == "invnext" and pressed then
+        print("\n invnext")
 
         -- Change Camera Distance
         if input.IsKeyDown( KEY_LSHIFT ) then -- If shift is pressed, change camera distance
@@ -619,7 +690,7 @@ function PlayerController.overrideBinds( ply, bind, pressed )
 
         -- if inv[idx][1] then
         --     --print("name:", inv[idx][1]:GetClass())
-        --     PlayerController.NetSendCl(PC_CL_WEAPON, inv[idx][1]:GetClass())
+        --     PlayerController.SendControlToSV(PC_CL_WEAPON, inv[idx][1]:GetClass())
         --     return true
         -- end
 
@@ -627,7 +698,7 @@ function PlayerController.overrideBinds( ply, bind, pressed )
 
     -- Q Button -> Drop Weapon
     elseif bind == "+menu" then
-        PlayerController.NetSendCl(PC_CL_DROP_WEAPON, controller.t_ply:GetActiveWeapon())
+        PlayerController.SendControlToSV(PC_CL_DROP_WEAPON, controller.t_ply:GetActiveWeapon())
         return true
 
     end
@@ -646,7 +717,7 @@ function PlayerController.buttonControls(ply, mv)
             print("End Player Control")
             controller.back_pressed = true
             net.Start("PlayerController:NetControl")
-                net.WriteInt(PC_CL_END, 6)
+                net.WriteUInt(PC_CL_END, 3)
             net.SendToServer()
         end
 
@@ -676,7 +747,7 @@ function PlayerController.buttonControls(ply, mv)
                 print("Switch through players.")
 
                 net.Start("PlayerController:NetControl")
-                    net.WriteInt(PC_CL_SWITCH , 6)
+                    net.WriteUInt(PC_CL_SWITCH , 3)
                     net.WriteEntity(alive_players[next])
                 net.SendToServer()
             else 
@@ -695,14 +766,14 @@ function PlayerController.buttonControls(ply, mv)
             if IsValid(ent) and ent:IsPlayer() and ent:Alive() then
                 if ent == controller.c_ply then
                     print("Terminating Control")
-                    net.Start("PlayerController:NetControl")
-                    net.WriteInt(PC_CL_END , 6)
+                        net.Start("PlayerController:NetControl")
+                        net.WriteUInt(PC_CL_END , 3)
                     net.SendToServer()
                 else
                     print("Switching to player:", ent:Nick())
-                    net.Start("PlayerController:NetControl")
-                    net.WriteInt(PC_CL_SWITCH , 6)
-                    net.WriteEntity(ent)
+                        net.Start("PlayerController:NetControl")
+                        net.WriteUInt(PC_CL_SWITCH , 3)
+                        net.WriteEntity(ent)
                     net.SendToServer()
                 end
             end
@@ -712,13 +783,13 @@ function PlayerController.buttonControls(ply, mv)
 
     -- look around without changing the eyeangle of t_ply
     elseif input.IsKeyDown(KEY_LSHIFT) and input.IsKeyDown(KEY_R) then
-        controller.look_around = true
+        controller.camera.look_around = true
         return
     end
     
     -- reset c_ply view
-    if controller.look_around == true then
-        controller.look_around = false
+    if controller.camera.look_around == true then
+        controller.camera.look_around = false
         controller.camera:ResetView()
     end
 

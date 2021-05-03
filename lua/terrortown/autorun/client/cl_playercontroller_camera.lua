@@ -10,20 +10,23 @@ setmetatable(PlayerCamera, {
     end,
 })
 
-function PlayerCamera:__init(c_ply, t_ply, view_flag)
-    self.c_ply = c_ply
-    self.t_ply = t_ply
+function PlayerCamera:__init(c_ply, t_ply, view_flag, net_flag)
+    self.c_ply    = c_ply
+    self.t_ply    = t_ply
 
-    self.view_flag        = view_flag
+    self.view_flag = view_flag
+    self.net_flag  = net_flag
 
-    self.offset           = 100
+    self.look_around = false
+
+    self.offset    = 100
     self.v_offset  = 5
-    self.h_offset = 10
+    self.h_offset  = 10
 
     -- THird Person Mode
-    self.wasOn            = false
-    self.inLerp           = 0
-    self.outLerp          = 1
+    self.wasOn     = false
+    self.inLerp    = 0
+    self.outLerp   = 1
 
 
     self.view_angles     = self.t_ply:EyeAngles()
@@ -200,9 +203,10 @@ function PlayerCamera:CreateMove( cmd, ply, on )
         -- view_angles.pitch  = math.Clamp(view_angles.pitch + cmd:GetMouseY() * 0.01 -90, 90)
         -- view_angles.yaw    = view_angles.yaw        - cmd:GetMouseX() * 0.01
     --else
-    self.view_angles.pitch  = math.Clamp(self.view_angles.pitch + cmd:GetMouseY() * 0.01, -85, 85)
-    self.view_angles.yaw    = self.view_angles.yaw              - cmd:GetMouseX() * 0.01
-    --end
+    if self.net_flag == PC_SERVERSIDE or self.look_around then 
+        self.view_angles.pitch  = math.Clamp(self.view_angles.pitch + cmd:GetMouseY() * 0.01, -85, 85)
+        self.view_angles.yaw    = self.view_angles.yaw              - cmd:GetMouseX() * 0.01
+    end
 
     self.corrected_angles = self.view_angles
 
