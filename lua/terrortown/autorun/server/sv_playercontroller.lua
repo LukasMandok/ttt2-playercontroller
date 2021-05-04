@@ -531,19 +531,19 @@ net.Receive("PlayerController:NetCommands", function (len, ply)
     if ply:IsController() or ply:IsControlled() then
 
         --local controller = calling_ply --.controller
-        ply["CameraAngles"] = net.ReadAngle() 
+        ply["CameraAngles"] = net.ReadAngle() or ply["CameraAngles"]
         --print("cmds:", ply:Nick(), ply["CameraAngles"])
 
-        ply["Buttons"] = net.ReadUInt(25)
-        ply["Impluse"] = net.ReadUInt(8)
+        ply["Buttons"] = net.ReadUInt(25) or 0
+        ply["Impluse"] = net.ReadUInt(8) or 0
 
-        ply["ForwardMove"] = net.ReadInt(15)
-        ply["SideMove"] = net.ReadInt(15)
-        ply["UpMove"] = net.ReadInt(15)
+        ply["ForwardMove"] = net.ReadInt(15) or 0
+        ply["SideMove"] = net.ReadInt(15) or 0
+        ply["UpMove"] = net.ReadInt(15) or 0
 
-        ply["MouseWheel"] = net.ReadInt(6)
-        ply["MouseX"] = net.ReadInt(14)
-        ply["MouseY"] = net.ReadInt(14)
+        ply["MouseWheel"] = net.ReadInt(6) or 0
+        ply["MouseX"] = net.ReadInt(14) or 0
+        ply["MouseY"] = net.ReadInt(14) or 0
 
         if ply:IsController() and ply.controller.net_flag == PC_CLIENTSIDE then
             print("Sending Information to the target player")

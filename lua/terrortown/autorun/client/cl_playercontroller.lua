@@ -294,14 +294,16 @@ function PlayerController.NetSendCommands(ply, cmd)
     if ply:IsController() and not ply.controller.camera.look_around then
         local camera = ply.controller.camera
         angles = camera:GetCorrectedAngles()
+        --print("Camera Angles", angles)
     
     -- controler + lookaround -> t_ply Angle()
     elseif ply:IsController() and ply.controller.camera.look_around then
-         angles = ply.controller.t_ply:EyeAngles()
+        --print("t_ply:EyeAngles")
+        angles = ply.controller.t_ply:EyeAngles()
     
     -- target -> input Angle
     elseif ply:IsControlled() then
-        print("t_ply cmd:GetViewAngles")
+        --print("t_ply cmd:GetViewAngles")
         angles = cmd:GetViewAngles()
     end
     

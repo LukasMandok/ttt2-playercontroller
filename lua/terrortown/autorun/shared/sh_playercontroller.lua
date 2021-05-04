@@ -145,7 +145,7 @@ function PlayerController:targetMove(cmd)
 		-- do some standard input handling
 		--print("Do standrad input handling")
 		local angle = t_ply:EyeAngles()
-		--print("angle: ", c_ply["CameraAngles"], angle)
+		--print("cameraAngles: ", c_ply["CameraAngles"], "angle", angle)
 
 		angle.pitch  = math.Clamp((c_ply["CameraAngles"] or angle).pitch + (t_ply["MouseY"] or 0) * 0.01, -85, 85) -- todo: es könnte sein, dass das nicht funktioniert
 		angle.yaw    = (c_ply["CameraAngles"] or angle).yaw              - (t_ply["MouseX"] or 0) * 0.01           --       da auf dem Client eine andere Richtung berechnet wird.

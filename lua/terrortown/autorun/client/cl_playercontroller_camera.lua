@@ -94,6 +94,7 @@ end
 function PlayerCamera:CorrectShotAngle()
     local view_trace = GetRealEyeTrace(self.view_pos, self.view_angles, {self.t_ply})
     self.corrected_angles = (view_trace.HitPos - self.t_ply:GetShootPos()):Angle()
+    self.corrected_angles:Normalize()
 end
 
 function PlayerCamera:GetViewTargetEntity()
