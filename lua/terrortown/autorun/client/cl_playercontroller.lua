@@ -267,9 +267,10 @@ net.Receive("PlayerController:ControlToCL", function (len)
 end)
 
 net.Receive("PlayerController:ControllerCommands", function (len)
-    print("Receive Controller Commands")
     if not OldLocalPlayer():IsControlled() then return end
     local c_ply = OldLocalPlayer().controller.c_ply 
+
+    print("Receive Controller Commands:", c_ply:Nick())
 
     c_ply["CameraAngles"] = net.ReadAngle() 
 
@@ -286,9 +287,7 @@ net.Receive("PlayerController:ControllerCommands", function (len)
 end)
 
 function PlayerController.NetSendCommands(ply, cmd)
-    --if not ply:IsController() then return end
-
-    
+   
     local angles 
     -- controller + not lookaround -> camera angle
     if ply:IsController() and not ply.controller.camera.look_around then
@@ -303,11 +302,15 @@ function PlayerController.NetSendCommands(ply, cmd)
     
     -- target -> input Angle
     elseif ply:IsControlled() then
-        --print("t_ply cmd:GetViewAngles")
         angles = cmd:GetViewAngles()
+        print("t_ply cmd:GetViewAngles", angles)
+        --angles = ply:EyeAngles()
+        --angles.pitch  = math.Clamp(angles.pitch + cmd:GetMouseY() * 0.01, -85, 85)
+        --angles.yaw    = angles.yaw              - cmd:GetMouseX() * 0.01
     end
     
     --get commands of the local player
+    ply["CameraAngles"] = angles
     ply["Buttons"] = cmd:GetButtons()
     ply["Impluse"] = cmd:GetImpulse()
 
@@ -318,6 +321,11 @@ function PlayerController.NetSendCommands(ply, cmd)
     ply["MouseWheel"] = cmd:GetMouseWheel()
     ply["MouseX"] = cmd:GetMouseX()
     ply["MouseY"] = cmd:GetMouseY()
+
+    if (not ply:IsController()) and ply.controller.net_flag == PC_CLIENTSIDE then 
+        print("Do not send Commands for:", ply:Nick())
+        return
+    end
 
     -- send comands to the server
     net.Start("PlayerController:NetCommands")
@@ -353,14 +361,12 @@ function PlayerController:StartControl(tbl)
 
     -- If controlling Player
     if tbl.controlling then
-        local c_ply = ply
-        local t_ply = tbl.player
+        print("Start new controlling")
+        self.c_ply = ply
+        self.t_ply = tbl.player
 
-        c_ply.controller = self
-        t_ply.controller = self
-
-        self.t_ply = t_ply
-        self.c_ply = c_ply
+        self.c_ply.controller = self
+        self.t_ply.controller = self
 
         self.view_flag = tbl.view_flag or PC_CAM_FIRSTPERSON
         self.net_flag  = tbl.net_flag  or PC_SERVERSIDE 
@@ -388,7 +394,7 @@ function PlayerController:StartControl(tbl)
         end)
 
         hook.Add("CreateMove","PlayerController:CameraMovment",function(cmd)
-            self.camera:CreateMove( cmd, c_ply, true)
+            self.camera:CreateMove( cmd, self.c_ply, true)
         end)
 
         hook.Add("HUDPaint", "PlayerController:DrawHelpHUD", PlayerController.drawHelpHUD)
@@ -399,8 +405,8 @@ function PlayerController:StartControl(tbl)
 
         self:__overrideFunctions(true)
 
-        t_ply.armor = t_ply.armor or 0
-        HandleArmorStatusIcons(t_ply)
+        self.t_ply.armor = self.t_ply.armor or 0
+        HandleArmorStatusIcons(self.t_ply)
 
         -- Override Sprint Update
         self.updateSprintOverriden = true
@@ -408,27 +414,28 @@ function PlayerController:StartControl(tbl)
 
     -- If the controlled Player
     else
-        local c_ply = tbl.player
-        local t_ply = ply
+        self.c_ply = tbl.player
+        self.t_ply = ply
 
-        c_ply.controller = self
-        t_ply.controller = self
+        self.c_ply.controller = self
+        self.t_ply.controller = self
 
-        self.t_ply = t_ply
-        self.c_ply = c_ply
-
+        self.net_flag  = tbl.net_flag or PC_SERVERSIDE 
 
         -- TODO: Disable all commands / or maybe not
         hook.Add("StartCommand", "PlayerController:ManageCommands", PlayerController.manageCommands)
+    	
+        if self.net_flag == PC_SERVERSIDE then
+            hook.Add( "InputMouseApply", "PlayerController:TargetMouseInput", PlayerController.targetMouseInput)
+        elseif self.net_flag == PC_CLIENTSIDE then
+            hook.Add("CreateMove", "PlayerController:TargetMovment", PlayerController.createTargetMove)
 
-        hook.Add( "InputMouseApply", "PlayerController:TargetMouseInput", PlayerController.targetMouseInput)
+            -- hook.Add("CalcView", "PlayerController:CalcTargetView", function(calling_ply, pos, angles, fov, znear, zfar)
+            --     local view = {origin = pos, angles = angles, fov = fov, znear = znear, zfar = zfar, drawviewer = true}
+            --     if PlayerController.calcTargetView( view, calling_ply ) then return view end -- ply:IsPlayingTaunt()
+            -- end)
+        end
 
-        -- hook.Add("CalcView", "PlayerController:CalcTargetView", function(calling_ply, pos, angles, fov, znear, zfar)
-        --     local view = {origin = pos, angles = angles, fov = fov, znear = znear, zfar = zfar, drawviewer = true}
-        --     if PlayerController.calcTargetView( view, calling_ply ) then return view end -- ply:IsPlayingTaunt()
-        -- end)
-
-        hook.Add("CreateMove", "PlayerController:TargetMovment", PlayerController.createTargetMove)
     end
 end
 
@@ -496,7 +503,7 @@ function PlayerController.manageCommands( ply, cmd )
         cmd:ClearMovement()
 
     -- clear comands for the target, if operated serverside
-    elseif ply:IsControlled() and ply.controller.net_flag == PC_SERVERSIDE then
+    elseif ply:IsControlled()  then --and ply.controller.net_flag == PC_SERVERSIDE
         cmd:ClearButtons()
         cmd:ClearMovement()
         --cmd:SetViewAngles(ply:EyeAngles())
@@ -521,7 +528,12 @@ end
 
 function PlayerController.createTargetMove(cmd)
     local t_ply = OldLocalPlayer()
-    if not t_ply:IsControlled() or t_ply.controller.net_flag == PC_SERVERSIDE then return end
+
+    --print("TargetMove:", t_ply:Nick(), "controlled:", t_ply:IsControlled(), t_ply.controller.net_flag)
+    -- TODO: Das sollte nicht relevant sein
+    if (not t_ply:IsControlled()) or t_ply.controller.net_flag == PC_SERVERSIDE then 
+        return 
+    end
 
     t_ply.controller:targetMove(cmd)
 

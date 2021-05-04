@@ -126,8 +126,6 @@ end
 function PlayerController:targetMove(cmd)
 	local t_ply = self.t_ply
 	local c_ply = self.c_ply
-	local commands = {}
-	local flag = false
 
 	cmd:ClearButtons()
 	cmd:ClearMovement()
@@ -144,13 +142,25 @@ function PlayerController:targetMove(cmd)
 	if flag == false then
 		-- do some standard input handling
 		--print("Do standrad input handling")
-		local angle = t_ply:EyeAngles()
-		--print("cameraAngles: ", c_ply["CameraAngles"], "angle", angle)
+		local angles = t_ply:EyeAngles()
+		--print("cameraAngles: ", c_ply["CameraAngles"], "angles", angles)
 
-		angle.pitch  = math.Clamp((c_ply["CameraAngles"] or angle).pitch + (t_ply["MouseY"] or 0) * 0.01, -85, 85) -- todo: es könnte sein, dass das nicht funktioniert
-		angle.yaw    = (c_ply["CameraAngles"] or angle).yaw              - (t_ply["MouseX"] or 0) * 0.01           --       da auf dem Client eine andere Richtung berechnet wird.
+		if self.net_flag == PC_CLIENTSIDE then
+			angles.pitch  = math.Clamp((angles).pitch + (t_ply["MouseY"] or 0) * 0.001 + (c_ply["MouseY"] or 0) * 0.001, -85, 85) -- todo: es könnte sein, dass das nicht funktioniert
+			angles.yaw    = 		   (angles).yaw   - (t_ply["MouseX"] or 0) * 0.001 - (c_ply["MouseX"] or 0) * 0.001           --       da auf dem Client eine andere Richtung berechnet wird.
+		else
+			angles.pitch  = math.Clamp((c_ply["CameraAngles"] or angles).pitch + (t_ply["MouseY"] or 0) * 0.01, -85, 85) -- todo: es könnte sein, dass das nicht funktioniert
+			angles.yaw    = (c_ply["CameraAngles"] or angles).yaw              - (t_ply["MouseX"] or 0) * 0.01           --       da auf dem Client eine andere Richtung berechnet wird.
+		end
 
-		commands["CameraAngles"] = commands["CameraAngles"] or angle
+		-- if self.net_flag == PC_SERVERSIDE then
+		-- 	angles.pitch  = math.Clamp((c_ply["CameraAngles"] or angles).pitch + (t_ply["MouseY"] or 0) * 0.01, -85, 85) -- todo: es könnte sein, dass das nicht funktioniert
+		-- 	angles.yaw    = (c_ply["CameraAngles"] or angles).yaw     
+		-- else
+		-- 	angles = t_ply["CameraAngles"]
+		-- end
+
+		commands["CameraAngles"] = commands["CameraAngles"] or angles
 		commands["Buttons"]      = commands["Buttons"]      or ((t_ply["Buttons"] or 0)     + (c_ply["Buttons"] or 0))
 		commands["Impulse"]      = commands["Impulse"]      or ((t_ply["Impulse"] or 0)     + (c_ply["Impulse"] or 0))
 		commands["ForwardMove"]  = commands["ForwardMove"]  or ((t_ply["ForwardMove"] or 0) + (c_ply["ForwardMove"] or 0))
@@ -207,8 +217,8 @@ function PlayerController:targetMove(cmd)
 	cmd:SetUpMove(commands["UpMove"] or 0)
 
 	cmd:SetMouseWheel(commands["MouseWheel"] or 0)
-	cmd:SetMouseX(commands["MouseX"] or 0)
-	cmd:SetMouseY(commands["MouseY"] or 0)
+	--cmd:SetMouseX(commands["MouseX"] or 0)
+	--cmd:SetMouseY(commands["MouseY"] or 0)
 end
 
 

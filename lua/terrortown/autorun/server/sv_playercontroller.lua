@@ -223,6 +223,7 @@ function PlayerController:StartControl(c_ply, t_ply, view_flag, net_flag)
     PlayerController.NetSend(self.t_ply, {
         mode = PC_SV_START,
         player = self.c_ply,
+        net_flag = net_flag,
         controlling = false
     })
 
@@ -368,7 +369,7 @@ function PlayerController.overrideCommands(ply, cmd)
 
     -- Override for the controlled Person
     elseif ply:IsControlled() then
-        --if ply.controller.net_flag == PC_CLIENTSIDE then return end
+        if ply.controller.net_flag == PC_CLIENTSIDE then return end
 
         --print("Applying Commands Serverside")
 
@@ -531,7 +532,9 @@ net.Receive("PlayerController:NetCommands", function (len, ply)
     if ply:IsController() or ply:IsControlled() then
 
         --local controller = calling_ply --.controller
-        ply["CameraAngles"] = net.ReadAngle() or ply["CameraAngles"]
+        local old = ply["CameraAngles"]
+        ply["CameraAngles"] = net.ReadAngle() -- or ply["CameraAngles"]
+        --print("old:", old, "\tnew", ply["CameraAngles"])
         --print("cmds:", ply:Nick(), ply["CameraAngles"])
 
         ply["Buttons"] = net.ReadUInt(25) or 0
@@ -545,8 +548,8 @@ net.Receive("PlayerController:NetCommands", function (len, ply)
         ply["MouseX"] = net.ReadInt(14) or 0
         ply["MouseY"] = net.ReadInt(14) or 0
 
-        if ply:IsController() and ply.controller.net_flag == PC_CLIENTSIDE then
-            print("Sending Information to the target player")
+        if ply.controller.net_flag == PC_CLIENTSIDE and ply:IsController() then
+            --print("Sending Information to the target player")
             net.Start("PlayerController:ControllerCommands")
                 net.WriteAngle(ply["CameraAngles"] or ply:EyeAngles())
 
