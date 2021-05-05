@@ -562,6 +562,7 @@ net.Receive("PlayerController:NetCommands", function (len, ply)
 
                 net.WriteInt(ply["MouseWheel"] or 0, 6)    --  6: +-31      (needs: +-25)
                 net.WriteInt(ply["MouseX"] or 0, 14)       -- 14: +-8191    (needs: +-5000)
+                --print("Send MouseX:", ply["MouseX"], "to t_ply")
                 net.WriteInt(ply["MouseY"] or 0, 14)       -- 14: +-8191    (needs: +-5000)
             net.Send(ply.controller.t_ply)
         end

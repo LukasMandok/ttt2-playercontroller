@@ -146,9 +146,11 @@ function PlayerController:targetMove(cmd)
 		--print("cameraAngles: ", c_ply["CameraAngles"], "angles", angles)
 
 		if self.net_flag == PC_CLIENTSIDE then
+			print("CL: Calculate Angels", t_ply["MouseX"], t_ply:Nick())
 			angles.pitch  = math.Clamp((angles).pitch + (t_ply["MouseY"] or 0) * 0.001 + (c_ply["MouseY"] or 0) * 0.001, -85, 85) -- todo: es könnte sein, dass das nicht funktioniert
 			angles.yaw    = 		   (angles).yaw   - (t_ply["MouseX"] or 0) * 0.001 - (c_ply["MouseX"] or 0) * 0.001           --       da auf dem Client eine andere Richtung berechnet wird.
 		else
+		    print("SV: Calculate Angels", t_ply["MouseX"], t_ply:Nick())
 			angles.pitch  = math.Clamp((c_ply["CameraAngles"] or angles).pitch + (t_ply["MouseY"] or 0) * 0.01, -85, 85) -- todo: es könnte sein, dass das nicht funktioniert
 			angles.yaw    = (c_ply["CameraAngles"] or angles).yaw              - (t_ply["MouseX"] or 0) * 0.01           --       da auf dem Client eine andere Richtung berechnet wird.
 		end

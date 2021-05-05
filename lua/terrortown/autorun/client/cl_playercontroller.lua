@@ -7,7 +7,6 @@ PlayerController.__index = PlayerController
 
 setmetatable(PlayerController, {
     __call = function(cls, ...) 
-        print("Creating PlayerController")
         local obj = setmetatable({}, cls)
         obj:__init(...)
         return obj
@@ -249,7 +248,6 @@ net.Receive("PlayerController:ControlToCL", function (len)
         if ply:IsController(tbl.player) then
 
             if tbl.type == PC_PICKUP_WEAPON then
-                print("\n\n Callinf HUDPWeaponPickedUp")
                 GAMEMODE:HUDWeaponPickedUp(tbl.weapon)
                 --gamemode.Call("HUDWeaponPickedUp", tbl.weapon)
 
@@ -303,10 +301,11 @@ function PlayerController.NetSendCommands(ply, cmd)
     -- target -> input Angle
     elseif ply:IsControlled() then
         angles = cmd:GetViewAngles()
-        print("t_ply cmd:GetViewAngles", angles)
+
         --angles = ply:EyeAngles()
         --angles.pitch  = math.Clamp(angles.pitch + cmd:GetMouseY() * 0.01, -85, 85)
         --angles.yaw    = angles.yaw              - cmd:GetMouseX() * 0.01
+        --print("t_ply cmd:GetViewAngles", angles)
     end
     
     --get commands of the local player
@@ -321,9 +320,9 @@ function PlayerController.NetSendCommands(ply, cmd)
     ply["MouseWheel"] = cmd:GetMouseWheel()
     ply["MouseX"] = cmd:GetMouseX()
     ply["MouseY"] = cmd:GetMouseY()
+    --print("MouseX:", cmd:GetMouseX(), ply:Nick())
 
     if (not ply:IsController()) and ply.controller.net_flag == PC_CLIENTSIDE then 
-        print("Do not send Commands for:", ply:Nick())
         return
     end
 
@@ -424,7 +423,8 @@ function PlayerController:StartControl(tbl)
 
         -- TODO: Disable all commands / or maybe not
         hook.Add("StartCommand", "PlayerController:ManageCommands", PlayerController.manageCommands)
-    	
+    	--hook.Add( "InputMouseApply", "PlayerController:TargetMouseInput", PlayerController.targetMouseInput)
+
         if self.net_flag == PC_SERVERSIDE then
             hook.Add( "InputMouseApply", "PlayerController:TargetMouseInput", PlayerController.targetMouseInput)
         elseif self.net_flag == PC_CLIENTSIDE then
